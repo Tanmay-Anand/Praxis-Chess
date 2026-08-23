@@ -1,0 +1,36 @@
+# Build outputs
+backend/target/
+frontend/dist/
+frontend/node/
+frontend/node_modules/
+**/*.jar
+**/*.class
+
+# VCS / IDE / OS
+.git/
+.github/
+.idea/
+.vscode/
+.claude/
+**/*.iml
+.DS_Store
+Thumbs.db
+
+# Local secrets — the image ships docker/application-docker.yml instead
+application.yml
+backend/src/main/resources/application.yml
+CLAUDE.md
+
+# Docs and assets not needed at build time
+*.md
+!backend/**/*.md
+*.jpeg
+*.png
+!frontend/public/**
+
+# Local infra state
+backend/infra/dev-postgresql/postgres_data/
+
+# Optional TTS sidecar model blobs (hundreds of MB, not part of this image)
+tts-service/models/*.onnx
+tts-service/models/*.bin

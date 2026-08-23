@@ -1,0 +1,69 @@
+# Full containerised Praxis Chess — app + database + local LLM runtime.
+#
+#   docker compose -f docker-compose.app.yml up -d
+#   open http://localhost:8086
+#
+# Pulls the published image by default. To run your working tree instead:
+#   docker compose -f docker-compose.app.yml up -d --build
+#
+# The `postgres` service comes from docker-compose.yml, which stays the single
+# definition of the database for both this stack and the native start.sh path.
+include:
+  - docker-compose.yml
+
+services:
+  app:
+    image: ${PRAXIS_IMAGE:-ghcr.io/rakshitrabugotra/praxis-chess:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: praxis-chess-app
+    restart: unless-stopped
+    ports:
+      - "${PRAXIS_PORT:-8086}:8086"
+    environment:
+      # ── Set this to your Chess.com handle before the first sync ──
+      PRAXISCHESS_CHESSCOM_USERNAME: ${PRAXISCHESS_CHESSCOM_USERNAME:-}
+
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/praxis_chess?ApplicationName=praxis-chess
+      SPRING_DATASOURCE_USERNAME: praxis_chess_user
+      SPRING_DATASOURCE_PASSWORD: praxis_chess_pass
+
+      # Swap for http://host.docker.internal:11434 to use an Ollama on the host.
+      PRAXISCHESS_OLLAMA_BASEURL: ${PRAXISCHESS_OLLAMA_BASEURL:-http://ollama:11434}
+      PRAXISCHESS_OLLAMA_MODEL: ${PRAXISCHESS_OLLAMA_MODEL:-qwen2.5:7b}
+      PRAXISCHESS_OLLAMA_REASONINGMODEL: ${PRAXISCHESS_OLLAMA_REASONINGMODEL:-qwen3:4b-instruct}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: praxis-chess-ollama
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+
+  # One-shot model download (~9 GB). Not part of `up` — run it once, explicitly:
+  #   docker compose -f docker-compose.app.yml --profile bootstrap up ollama-init
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: praxis-chess-ollama-init
+    profiles: ["bootstrap"]
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "until ollama list >/dev/null 2>&1; do echo 'waiting for ollama...'; sleep 2; done;
+       ollama pull ${PRAXISCHESS_OLLAMA_MODEL:-qwen2.5:7b} &&
+       ollama pull ${PRAXISCHESS_OLLAMA_REASONINGMODEL:-qwen3:4b-instruct}"
+    restart: "no"
+
+volumes:
+  ollama_models:
