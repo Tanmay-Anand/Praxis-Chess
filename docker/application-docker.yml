@@ -1,0 +1,98 @@
+# Configuration baked into the Praxis Chess container image.
+#
+# Nothing here is secret and nothing needs editing to boot — every value can be
+# overridden with an environment variable (Spring relaxed binding: dots become
+# underscores, dashes are dropped, uppercase). For example:
+#
+#   PRAXISCHESS_CHESSCOM_USERNAME=magnus
+#   PRAXISCHESS_OLLAMA_MODEL=qwen2.5:7b
+#   SPRING_DATASOURCE_URL=jdbc:postgresql://my-db:5432/praxis_chess
+#
+# To replace the file wholesale, bind-mount over /app/config/application.yml.
+
+spring:
+  application:
+    name: praxis-chess
+
+  datasource:
+    # Defaults point at the `postgres` service in docker-compose.app.yml.
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/praxis_chess?ApplicationName=praxis-chess}
+    username: ${SPRING_DATASOURCE_USERNAME:praxis_chess_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:praxis_chess_pass}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: praxis-chess-hikari
+      maximum-pool-size: 5
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      # The DB may still be starting when the app is; don't die on first miss.
+      initialization-fail-timeout: -1
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update   # creates the schema on first run
+    show-sql: false
+    properties:
+      hibernate:
+        jdbc:
+          time-zone: UTC
+          batch_size: 500
+
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    time-zone: UTC
+
+server:
+  port: 8086
+  forward-headers-strategy: NATIVE   # correct URLs behind a reverse proxy
+
+praxis-chess:
+  chess-com:
+    # Set this before your first sync: -e PRAXISCHESS_CHESSCOM_USERNAME=...
+    username: ${PRAXISCHESS_CHESSCOM_USERNAME:}
+
+  stockfish:
+    # Installed in the image by the distro package.
+    path: ${PRAXISCHESS_STOCKFISH_PATH:/usr/games/stockfish}
+
+  ollama:
+    # `ollama` service in compose; use http://host.docker.internal:11434 to
+    # reach an Ollama running on the host instead.
+    base-url: ${PRAXISCHESS_OLLAMA_BASEURL:http://ollama:11434}
+    model: ${PRAXISCHESS_OLLAMA_MODEL:qwen2.5:7b}
+    move-model: ${PRAXISCHESS_OLLAMA_MOVEMODEL:qwen2.5:7b}
+    report-model: ${PRAXISCHESS_OLLAMA_REPORTMODEL:qwen2.5:7b}
+    reasoning-model: ${PRAXISCHESS_OLLAMA_REASONINGMODEL:qwen3:4b-instruct}
+
+  tts:
+    # The Kokoro sidecar is not part of this image. Prax stays silent but fully
+    # functional; point it at a reachable service and flip this to true to use one.
+    enabled: ${PRAXISCHESS_TTS_ENABLED:false}
+    base-url: ${PRAXISCHESS_TTS_BASEURL:http://tts:8087}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  endpoint:
+    health:
+      show-details: always
+  # No tracing collector in the default stack — sample nothing rather than
+  # spending every request on an export that has nowhere to go.
+  tracing:
+    sampling:
+      probability: 0.0
+
+logging:
+  level:
+    com.praxis: ${PRAXISCHESS_LOG_LEVEL:INFO}

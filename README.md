@@ -152,6 +152,41 @@ A separate path from the analysis pipeline. The pipeline writes rows; Prax reads
 
 ---
 
+## Run with Docker
+
+The whole app — backend, frontend, and Stockfish — is published as one image, so
+there is nothing to install but Docker:
+
+```bash
+docker compose -f docker-compose.app.yml up -d
+```
+
+Open <http://localhost:8086>. That brings up the app alongside PostgreSQL and
+Ollama, and creates the schema on first boot. Set your handle with
+`PRAXISCHESS_CHESSCOM_USERNAME`, then pull the models once:
+
+```bash
+docker compose -f docker-compose.app.yml --profile bootstrap up ollama-init
+```
+
+Or run just the app against services you already have:
+
+```bash
+docker run -d -p 8086:8086 \
+  -e PRAXISCHESS_CHESSCOM_USERNAME=your_handle \
+  -e PRAXISCHESS_OLLAMA_BASEURL=http://host.docker.internal:11434 \
+  --add-host host.docker.internal:host-gateway \
+  ghcr.io/rakshitrabugotra/praxis-chess:latest
+```
+
+Full configuration reference, GPU passthrough, and publishing details are in
+**[DOCKER.md](DOCKER.md)**.
+
+The rest of this section covers running from source, which you want if you're
+developing on Praxis rather than using it.
+
+---
+
 ## Prerequisites
 
 - **Java 26+** (JDK 26)
@@ -295,6 +330,12 @@ praxis-chess/
 │                                   #   Dashboard, GameList, GameAnalysis, Drills,
 │                                   #   PatternReport, TrainingPlan
 ├── tts-service/                    # Kokoro-82M FastAPI sidecar (optional, CPU-only)
+├── docker/
+│   └── application-docker.yml      # Config baked into the image (env-overridable)
+├── Dockerfile                      # Multi-stage build → single self-contained image
+├── docker-compose.yml              # PostgreSQL only — used by start.sh
+├── docker-compose.app.yml          # Full stack: app + PostgreSQL + Ollama
+├── DOCKER.md                       # Container usage, configuration, publishing
 └── ARCHITECTURE.md                 # Full design decisions + Mermaid diagrams
 ```
 
